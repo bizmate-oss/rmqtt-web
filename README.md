@@ -45,6 +45,50 @@ The whole stack in containers:
 docker compose up -d         # dashboard on http://localhost:3000
 ```
 
+## Container image
+
+Every push to `main` and every `v*.*.*` tag publishes a multi-arch image to
+GitHub Container Registry from
+[`.github/workflows/publish-image.yml`](.github/workflows/publish-image.yml).
+
+```bash
+docker run --rm -p 3000:3000 \
+  -e RMQTT_API_URL=http://your-broker:6060 \
+  -e RMQTT_MQTT_URL=mqtt://your-broker:1883 \
+  ghcr.io/<owner>/rmqtt-web:latest
+```
+
+|            |                                                                                                           |
+| ---------- | --------------------------------------------------------------------------------------------------------- |
+| Platforms  | `linux/amd64`, `linux/arm64`                                                                              |
+| Tags       | `latest` (default branch), the branch name, `sha-<full-sha>`, and for a `v1.2.3` tag: `1.2.3`, `1.2`, `1` |
+| Provenance | A signed build attestation is pushed alongside the image                                                  |
+
+Each platform is built on a runner of its own architecture rather than under
+QEMU: the image runs `npm ci` and a Vite build, both slow and occasionally
+flaky when Node is emulated. The per-arch images are pushed by digest and
+joined into one manifest list, so a single tag serves both. Pull requests build
+without pushing, so a fork cannot publish.
+
+Verify the attestation before trusting a pull:
+
+```bash
+gh attestation verify oci://ghcr.io/<owner>/rmqtt-web:latest --repo <owner>/rmqtt-web
+```
+
+### Making the package public — a one-time manual step
+
+**A new GHCR package is private, and it does not inherit the repository's
+visibility.** There is no API for changing it, so no workflow can do this for
+you. After the first successful run:
+
+1. Open `https://github.com/<owner>/rmqtt-web/pkgs/container/rmqtt-web`
+2. **Package settings** → **Danger Zone** → **Change visibility** → **Public**
+
+The workflow probes the registry anonymously at the end of every run and emits
+a warning naming this step until it is done, so a silently-private image does
+not go unnoticed. Note that a package cannot be made private again once public.
+
 ## Broker requirements
 
 Three plugins matter. The Settings page reports which are active and what each

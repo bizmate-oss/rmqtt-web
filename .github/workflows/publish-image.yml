@@ -1,0 +1,236 @@
+name: Publish container image
+
+# Builds the dashboard image and publishes it to GitHub Container Registry.
+#
+# Each platform is built on a runner of its own architecture rather than under
+# QEMU emulation: the image runs `npm ci` and a Vite build, both of which are
+# slow and occasionally flaky when Node is emulated. The per-platform images are
+# pushed by digest and then joined into one multi-arch manifest list by the
+# `merge` job, so a single tag serves amd64 and arm64.
+#
+# Pull requests build but never push, so a fork cannot publish an image.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+
+# Superseded runs of the same branch are pointless once a newer commit lands.
+concurrency:
+  group: publish-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            # Free and unlimited on public repositories, and far quicker than
+            # building arm64 through QEMU.
+            runner: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Prepare identifiers
+        env:
+          platform: ${{ matrix.platform }}
+        run: |
+          # A registry path must be lowercase, and a GitHub owner or repository
+          # name may contain capitals, so github.repository cannot be used as-is.
+          # `tr` rather than ${x,,} so the snippet does not need bash 4+.
+          image=$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE=$image" >> "$GITHUB_ENV"
+          # linux/amd64 -> linux-amd64, for use in artifact and cache names.
+          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
+
+      - name: Collect image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE }}
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to ${{ env.REGISTRY }}
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          # Supplied automatically by Actions; `packages: write` above is what
+          # grants it permission to push.
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          # These labels carry org.opencontainers.image.source, which is what
+          # makes GHCR link the package to this repository.
+          labels: ${{ steps.meta.outputs.labels }}
+          # Per-platform attestations would be orphaned by the manifest merge
+          # below; the merged image gets a real one in the `merge` job instead.
+          provenance: false
+          cache-from: type=gha,scope=${{ env.PLATFORM_PAIR }}
+          cache-to: type=gha,mode=max,scope=${{ env.PLATFORM_PAIR }}
+          # On a pull request the image is built and thrown away.
+          outputs: ${{ github.event_name == 'pull_request' && 'type=cacheonly' || format('type=image,name={0}/{1},push-by-digest=true,name-canonical=true,push=true', env.REGISTRY, env.IMAGE) }}
+
+      - name: Record the digest
+        if: github.event_name != 'pull_request'
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p /tmp/digests
+          # The filename is the digest; the merge job needs nothing but the name.
+          touch "/tmp/digests/${DIGEST#sha256:}"
+
+      - name: Upload the digest
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: digest-${{ env.PLATFORM_PAIR }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: Publish manifest list
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      # Both are required by actions/attest-build-provenance.
+      id-token: write
+      attestations: write
+    steps:
+      - name: Prepare identifiers
+        run: |
+          # See the note in the build job: a registry path must be lowercase.
+          image=$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE=$image" >> "$GITHUB_ENV"
+
+      - name: Download the per-platform digests
+        uses: actions/download-artifact@v8
+        with:
+          path: /tmp/digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Collect image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        env:
+          # Annotations belong on the manifest list rather than on a single
+          # manifest; the action emits them already prefixed with this level.
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: index
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,format=long
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Log in to ${{ env.REGISTRY }}
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create the multi-arch manifest list
+        working-directory: /tmp/digests
+        env:
+          IMAGE_REF: ${{ env.REGISTRY }}/${{ env.IMAGE }}
+        run: |
+          # Built as an array rather than by interpolating a command string:
+          # tags and annotation values contain characters that word splitting
+          # would mangle. metadata-action exports both as newline-separated
+          # values, and the annotations already carry their `index:` prefix.
+          args=()
+          while IFS= read -r tag; do
+            [ -n "$tag" ] && args+=(--tag "$tag")
+          done <<< "$DOCKER_METADATA_OUTPUT_TAGS"
+
+          while IFS= read -r annotation; do
+            [ -n "$annotation" ] && args+=(--annotation "$annotation")
+          done <<< "$DOCKER_METADATA_OUTPUT_ANNOTATIONS"
+
+          # One source reference per digest file left by the build jobs.
+          for digest in *; do
+            args+=("${IMAGE_REF}@sha256:${digest}")
+          done
+
+          docker buildx imagetools create "${args[@]}"
+
+      - name: Inspect the published image
+        id: inspect
+        env:
+          IMAGE_REF: ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ steps.meta.outputs.version }}
+        run: |
+          docker buildx imagetools inspect "$IMAGE_REF"
+          digest=$(docker buildx imagetools inspect "$IMAGE_REF" --format '{{json .Manifest}}' | jq -r .digest)
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE }}
+          subject-digest: ${{ steps.inspect.outputs.digest }}
+          push-to-registry: true
+
+      - name: Check the image is publicly pullable
+        env:
+          TAG: ${{ steps.meta.outputs.version }}
+        run: |
+          # The package slug is the lowercased repository name, so it is derived
+          # from $IMAGE rather than from the event payload's original casing.
+          package_url="https://github.com/${GITHUB_REPOSITORY}/pkgs/container/${IMAGE#*/}"
+          # A GHCR package is private when first published and does not inherit
+          # the repository's visibility, and there is no API to change it — it is
+          # a one-time switch in the package settings. Rather than let that fail
+          # silently, probe the registry anonymously and report what we find.
+          #
+          # For a package that is not publicly readable the anonymous token
+          # request is itself refused. Steps run under `bash -e`, so that has to
+          # be tolerated explicitly or this reports as a build failure instead of
+          # the actionable warning below.
+          token=$(curl -fsSL "https://ghcr.io/token?scope=repository:${IMAGE}:pull&service=ghcr.io" | jq -r .token || true)
+          http_code=$(curl -sSL -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${token}" \
+            -H 'Accept: application/vnd.oci.image.index.v1+json' \
+            -H 'Accept: application/vnd.docker.distribution.manifest.list.v2+json' \
+            "https://ghcr.io/v2/${IMAGE}/manifests/${TAG}")
+
+          if [ "$http_code" = '200' ]; then
+            echo "::notice title=Image is public::docker pull ${REGISTRY}/${IMAGE}:${TAG}"
+          else
+            echo "::warning title=Package is not public yet::Anonymous pull of ${REGISTRY}/${IMAGE}:${TAG} returned HTTP ${http_code}. A new GHCR package stays private until you change it once, by hand: open ${package_url} -> Package settings -> Danger Zone -> Change visibility -> Public. Visibility is not inherited from the repository and there is no API for it, so this warning repeats until that is done."
+          fi

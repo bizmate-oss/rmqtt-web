@@ -31,6 +31,9 @@ services:
     restart: on-failure
 
   dashboard:
+    # Builds from this checkout. To run the published image instead, replace
+    # this line with:
+    #   image: ghcr.io/<owner>/rmqtt-web:latest
     build: .
     container_name: rmqtt-web
     depends_on:
