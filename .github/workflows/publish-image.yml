@@ -21,10 +21,20 @@ on:
 env:
   REGISTRY: ghcr.io
 
-# Superseded runs of the same branch are pointless once a newer commit lands.
+# One publish at a time, across every ref rather than per ref.
+#
+# Pushing a commit and its release tag together starts two runs of this
+# workflow. They build byte-identical images, so both push the same digests and
+# then both write overlapping tags — `sha-<sha>` belongs to both — and running
+# the two manifest writes concurrently raced on the registry: for v0.0.4 the
+# branch run won and the tag run failed, leaving the release with no image.
+#
+# Queuing rather than cancelling, because a release must never be dropped
+# because a branch push superseded it. Successive pushes therefore build in
+# sequence; the layer cache keeps that cheap.
 concurrency:
-  group: publish-image-${{ github.ref }}
-  cancel-in-progress: true
+  group: publish-image
+  cancel-in-progress: false
 
 jobs:
   build:
