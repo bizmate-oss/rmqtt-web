@@ -55,7 +55,7 @@ GitHub Container Registry from
 docker run --rm -p 3000:3000 \
   -e RMQTT_API_URL=http://your-broker:6060 \
   -e RMQTT_MQTT_URL=mqtt://your-broker:1883 \
-  ghcr.io/<owner>/rmqtt-web:latest
+  ghcr.io/bizmate-oss/rmqtt-web:latest
 ```
 
 |            |                                                                                                           |
@@ -73,21 +73,29 @@ without pushing, so a fork cannot publish.
 Verify the attestation before trusting a pull:
 
 ```bash
-gh attestation verify oci://ghcr.io/<owner>/rmqtt-web:latest --repo <owner>/rmqtt-web
+gh attestation verify oci://ghcr.io/bizmate-oss/rmqtt-web:latest --repo bizmate-oss/rmqtt-web
 ```
 
 ### Making the package public — a one-time manual step
 
 **A new GHCR package is private, and it does not inherit the repository's
-visibility.** There is no API for changing it, so no workflow can do this for
-you. After the first successful run:
+visibility** — a public repo still gets a private package. The Packages REST
+API has no endpoint that changes visibility (only list, get, delete and
+restore), so no workflow can do this. It has to be done once, by hand:
 
-1. Open `https://github.com/<owner>/rmqtt-web/pkgs/container/rmqtt-web`
-2. **Package settings** → **Danger Zone** → **Change visibility** → **Public**
+1. Open <https://github.com/bizmate-oss/rmqtt-web/pkgs/container/rmqtt-web>
+   (or the organisation's [Packages tab](https://github.com/orgs/bizmate-oss/packages))
+2. **Package settings** (gear, right-hand side)
+3. **Danger Zone** → **Change visibility** → **Public**, then confirm by typing
+   the package name
 
-The workflow probes the registry anonymously at the end of every run and emits
-a warning naming this step until it is done, so a silently-private image does
-not go unnoticed. Note that a package cannot be made private again once public.
+If **Public** is not offered, an organisation owner has to allow it first, under
+**Organisation settings → Packages → Package creation**. A package cannot be
+made private again once public.
+
+The workflow probes the registry anonymously after every publish and, when the
+image is not pullable, reports whether the API calls it `private` or `internal`
+and names these steps — so a silently-private image does not go unnoticed.
 
 ## Broker requirements
 

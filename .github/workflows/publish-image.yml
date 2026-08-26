@@ -246,8 +246,12 @@ jobs:
             api="https://api.github.com/users/${OWNER}/packages/container/${package}"
             settings_hint="${package_url} -> Package settings"
           fi
-          visibility=$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H 'Accept: application/vnd.github+json' "$api" \
-            | jq -r '.visibility // "unknown"' || echo 'unavailable')
+          # Fetched and parsed in two steps on purpose: `||` binds to the whole
+          # pipeline, and jq exits 0 on empty input, so a `curl … | jq || echo`
+          # fallback silently yields an empty string when the request fails.
+          body=$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' "$api" || true)
+          visibility=$(printf '%s' "$body" | jq -r '.visibility // empty' 2>/dev/null || true)
+          [ -n "$visibility" ] || visibility='unavailable'
 
           echo "::warning title=Package is not public (${visibility})::Anonymous pull of ${REGISTRY}/${IMAGE}:${TAG} returned HTTP ${http_code}; the API reports visibility '${visibility}'. Fix it once, by hand: open ${settings_hint} -> Danger Zone -> Change visibility -> Public. There is no REST endpoint for package visibility, so this cannot be automated, and this warning repeats until it is done. If Public is not offered, an organisation owner must first allow public packages under Organisation settings -> Packages -> Package creation. A package cannot be made private again once public."
