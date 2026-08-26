@@ -73,7 +73,7 @@ jobs:
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
+          username: ${{ github.repository_owner }}
           # Supplied automatically by Actions; `packages: write` above is what
           # grants it permission to push.
           password: ${{ secrets.GITHUB_TOKEN }}
@@ -209,19 +209,21 @@ jobs:
       - name: Check the image is publicly pullable
         env:
           TAG: ${{ steps.meta.outputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          OWNER_TYPE: ${{ github.event.repository.owner.type }}
         run: |
-          # The package slug is the lowercased repository name, so it is derived
-          # from $IMAGE rather than from the event payload's original casing.
-          package_url="https://github.com/${GITHUB_REPOSITORY}/pkgs/container/${IMAGE#*/}"
           # A GHCR package is private when first published and does not inherit
-          # the repository's visibility, and there is no API to change it — it is
-          # a one-time switch in the package settings. Rather than let that fail
-          # silently, probe the registry anonymously and report what we find.
-          #
-          # For a package that is not publicly readable the anonymous token
-          # request is itself refused. Steps run under `bash -e`, so that has to
-          # be tolerated explicitly or this reports as a build failure instead of
-          # the actionable warning below.
+          # the repository's visibility. The Packages REST API has no endpoint
+          # that changes visibility — only list, get, delete and restore — so no
+          # workflow can do this. Rather than let it fail silently, report the
+          # actual state and name the steps.
+          package="${IMAGE#*/}"
+          package_url="https://github.com/${GITHUB_REPOSITORY}/pkgs/container/${package}"
+
+          # The registry answer is the one that matters: can anyone pull this?
+          # A package that is not publicly readable refuses the anonymous token
+          # request outright, and steps run under `bash -e`, so tolerate that.
           token=$(curl -fsSL "https://ghcr.io/token?scope=repository:${IMAGE}:pull&service=ghcr.io" | jq -r .token || true)
           http_code=$(curl -sSL -o /dev/null -w '%{http_code}' \
             -H "Authorization: Bearer ${token}" \
@@ -231,6 +233,21 @@ jobs:
 
           if [ "$http_code" = '200' ]; then
             echo "::notice title=Image is public::docker pull ${REGISTRY}/${IMAGE}:${TAG}"
-          else
-            echo "::warning title=Package is not public yet::Anonymous pull of ${REGISTRY}/${IMAGE}:${TAG} returned HTTP ${http_code}. A new GHCR package stays private until you change it once, by hand: open ${package_url} -> Package settings -> Danger Zone -> Change visibility -> Public. Visibility is not inherited from the repository and there is no API for it, so this warning repeats until that is done."
+            exit 0
           fi
+
+          # Not pullable. Ask the API which of private/internal it is, because
+          # the remedy differs: `internal` on an organisation usually means the
+          # org only permits internal packages, which an owner must change first.
+          if [ "$OWNER_TYPE" = 'Organization' ]; then
+            api="https://api.github.com/orgs/${OWNER}/packages/container/${package}"
+            settings_hint="${package_url} -> Package settings, or the organisation's Packages tab at https://github.com/orgs/${OWNER}/packages"
+          else
+            api="https://api.github.com/users/${OWNER}/packages/container/${package}"
+            settings_hint="${package_url} -> Package settings"
+          fi
+          visibility=$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' "$api" \
+            | jq -r '.visibility // "unknown"' || echo 'unavailable')
+
+          echo "::warning title=Package is not public (${visibility})::Anonymous pull of ${REGISTRY}/${IMAGE}:${TAG} returned HTTP ${http_code}; the API reports visibility '${visibility}'. Fix it once, by hand: open ${settings_hint} -> Danger Zone -> Change visibility -> Public. There is no REST endpoint for package visibility, so this cannot be automated, and this warning repeats until it is done. If Public is not offered, an organisation owner must first allow public packages under Organisation settings -> Packages -> Package creation. A package cannot be made private again once public."
