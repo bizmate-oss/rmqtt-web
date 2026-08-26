@@ -117,6 +117,23 @@ curl -X PUT http://localhost:6060/api/v1/plugins/1/rmqtt-sys-topic/load
 or permanently, by adding `rmqtt-sys-topic` to `plugins.default_startups` in
 `rmqtt.toml`.
 
+### Host metrics are not process metrics
+
+The memory, disk and load figures on the Nodes pages come from
+`/api/v1/nodes` and describe the **whole machine**, not the rmqtt process.
+rmqtt exposes no per-process CPU or memory on any endpoint — not on
+`/api/v1/nodes`, not in `/api/v1/metrics/prometheus`, and not in
+`/api/v1/stats/sys`. Measured on the stock container, the broker reported
+`memory_used` of 248 MiB while the `rmqttd` process held 50 MiB resident: the
+first figure is the host's.
+
+Under a container runtime those values are read from the host the container
+runs on, so on Kubernetes they describe the node rather than the pod. For the
+broker's own usage use `kubectl top pod`, cAdvisor
+(`container_memory_working_set_bytes`, `container_cpu_usage_seconds_total`) or
+whatever metrics stack you already run. The pages say "host" on every such
+figure so the two are not confused.
+
 ### Published topics vs the routing table
 
 These are two different things, and the dashboard keeps them apart:

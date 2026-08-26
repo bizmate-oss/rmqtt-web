@@ -191,25 +191,25 @@
 			<div class="flex flex-wrap gap-6">
 				<div class="min-w-44">
 					<div class="mb-1 flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
-						<Icon name="memory" size={12} /> Memory
+						<Icon name="memory" size={12} /> Host memory
 					</div>
-					<Meter value={node.memory_used} max={node.memory_total} label="memory" />
+					<Meter value={node.memory_used} max={node.memory_total} label="host memory" />
 					<div class="mt-1 text-[11px] text-[var(--text-2)] tabular-nums">
 						{bytes(node.memory_used)} used · {bytes(node.memory_free)} free
 					</div>
 				</div>
 				<div class="min-w-44">
 					<div class="mb-1 flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
-						<Icon name="disk" size={12} /> Disk
+						<Icon name="disk" size={12} /> Host disk
 					</div>
-					<Meter value={node.disk_total - node.disk_free} max={node.disk_total} label="disk" />
+					<Meter value={node.disk_total - node.disk_free} max={node.disk_total} label="host disk" />
 					<div class="mt-1 text-[11px] text-[var(--text-2)] tabular-nums">
 						{bytes(node.disk_total - node.disk_free)} used · {bytes(node.disk_free)} free
 					</div>
 				</div>
 				<div class="min-w-32">
 					<div class="mb-1 flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
-						<Icon name="cpu" size={12} /> Load average
+						<Icon name="cpu" size={12} /> Host load average
 					</div>
 					<div class="flex gap-3 text-sm font-semibold text-[var(--text)] tabular-nums">
 						<span title="1 minute">{node.load1?.toFixed(2)}</span>
@@ -221,6 +221,16 @@
 					<div class="mt-0.5 text-[10px] text-[var(--text-muted)]">1m · 5m · 15m</div>
 				</div>
 			</div>
+
+			<p class="w-full border-t border-[var(--border)] pt-3 text-[11px] text-[var(--text-muted)]">
+				<Icon name="info" size={11} class="inline align-[-1px]" />
+				Memory, disk and load are the <strong>whole machine's</strong>, taken from
+				<code class="mono">/api/v1/nodes</code>
+				— not the rmqtt process's. rmqtt exposes no per-process CPU or memory on any endpoint. Under a
+				container runtime these figures come from the host the container sits on, so on Kubernetes they
+				describe the node, not the pod: use <code class="mono">kubectl top pod</code> or your metrics
+				stack for the broker's own usage.
+			</p>
 		</section>
 
 		<!-- Current gauges -->

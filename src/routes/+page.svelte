@@ -191,7 +191,8 @@
 				<div>
 					<h2 class="text-sm font-semibold text-[var(--text)]">Cluster nodes</h2>
 					<p class="mt-0.5 text-[11px] text-[var(--text-muted)]">
-						Live host resources from <code class="mono">/api/v1/nodes</code>
+						Whole-machine resources from <code class="mono">/api/v1/nodes</code>, not the broker
+						process
 					</p>
 				</div>
 				<a href="/nodes" class="btn btn-ghost btn-sm">
@@ -230,7 +231,7 @@
 								</span>
 							</div>
 							<div class="flex justify-between gap-2">
-								<span class="text-[var(--text-muted)]">Load 1m</span>
+								<span class="text-[var(--text-muted)]">Host load 1m</span>
 								<span class="font-medium text-[var(--text)] tabular-nums">
 									{node.load1?.toFixed(2) ?? '—'}
 								</span>
@@ -243,11 +244,11 @@
 
 						<div class="flex flex-col gap-1.5">
 							<div class="flex items-center gap-2">
-								<span class="w-10 shrink-0 text-[10px] text-[var(--text-muted)]">Mem</span>
+								<span class="w-14 shrink-0 text-[10px] text-[var(--text-muted)]">Host mem</span>
 								<Meter
 									value={node.memory_used}
 									max={node.memory_total}
-									label="memory used on {node.node_name}"
+									label="host memory used on {node.node_name}"
 								/>
 								<span
 									class="w-20 shrink-0 text-right text-[10px] text-[var(--text-muted)] tabular-nums"
@@ -256,11 +257,11 @@
 								</span>
 							</div>
 							<div class="flex items-center gap-2">
-								<span class="w-10 shrink-0 text-[10px] text-[var(--text-muted)]">Disk</span>
+								<span class="w-14 shrink-0 text-[10px] text-[var(--text-muted)]">Host disk</span>
 								<Meter
 									value={node.disk_total - node.disk_free}
 									max={node.disk_total}
-									label="disk used on {node.node_name}"
+									label="host disk used on {node.node_name}"
 								/>
 								<span
 									class="w-20 shrink-0 text-right text-[10px] text-[var(--text-muted)] tabular-nums"

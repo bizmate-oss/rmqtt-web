@@ -206,11 +206,11 @@
 							{direction}
 							{onsort}
 						/>
-						<SortHeader column="memory" label="Memory" active={sortBy} {direction} {onsort} />
-						<SortHeader column="disk" label="Disk" active={sortBy} {direction} {onsort} />
+						<SortHeader column="memory" label="Host memory" active={sortBy} {direction} {onsort} />
+						<SortHeader column="disk" label="Host disk" active={sortBy} {direction} {onsort} />
 						<SortHeader
 							column="load1"
-							label="Load 1/5/15"
+							label="Host load 1/5/15"
 							align="right"
 							active={sortBy}
 							{direction}
@@ -255,7 +255,7 @@
 								<Meter
 									value={node.memory_used}
 									max={node.memory_total}
-									label="memory on {node.node_name}"
+									label="host memory used on {node.node_name}"
 								/>
 								<div class="mt-0.5 text-[10px] text-[var(--text-muted)] tabular-nums">
 									{bytes(node.memory_used)} / {bytes(node.memory_total)}
@@ -265,7 +265,7 @@
 								<Meter
 									value={node.disk_total - node.disk_free}
 									max={node.disk_total}
-									label="disk on {node.node_name}"
+									label="host disk used on {node.node_name}"
 								/>
 								<div class="mt-0.5 text-[10px] text-[var(--text-muted)] tabular-nums">
 									{bytes(node.disk_free)} free
@@ -300,5 +300,14 @@
 		<code class="mono">/api/v1/stats</code> and <code class="mono">/api/v1/metrics</code> read in
 		the same snapshot as the node list, so these rows always add up to the cluster figures on the
 		overview. <strong>Msgs in</strong> is the cumulative PUBLISH count since the node started, not a rate.
+	</p>
+
+	<p class="text-[11px] text-[var(--text-muted)]">
+		Memory, disk and load are the <strong>whole machine's</strong>, taken from
+		<code class="mono">/api/v1/nodes</code>
+		— not the rmqtt process's. rmqtt exposes no per-process CPU or memory on any endpoint. Under a container
+		runtime these figures come from the host the container sits on, so on Kubernetes they describe the
+		node, not the pod: use <code class="mono">kubectl top pod</code> or your metrics stack for the broker's
+		own usage.
 	</p>
 </div>
