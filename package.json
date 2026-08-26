@@ -1,7 +1,13 @@
 {
 	"name": "rmqtt-web",
 	"private": true,
-	"version": "0.1.0",
+	"version": "0.0.2",
+	"description": "Monitoring and control dashboard for an RMQTT broker cluster",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/bizmate-oss/rmqtt-web.git"
+	},
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
@@ -30,6 +36,5 @@
 	},
 	"dependencies": {
 		"mqtt": "^5.15.2"
-	},
-	"description": "Monitoring and control dashboard for an RMQTT broker cluster"
+	}
 }

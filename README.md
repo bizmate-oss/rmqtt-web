@@ -266,3 +266,11 @@ src/
     api/stream             server-sent events for live MQTT
     api/runtime-config     non-secret config for the browser
 ```
+
+## Licence
+
+[MIT](LICENSE) © 2026 Bizmate.
+
+This project only talks to [RMQTT](https://github.com/rmqtt/rmqtt) over its
+HTTP API and MQTT; it bundles no rmqtt code. rmqtt itself is offered under
+MIT OR Apache-2.0.
