@@ -15,7 +15,7 @@ the deployment through the rmqtt HTTP API, in the spirit of the EMQX dashboard.
 | **Node detail**       | One node's counters, full metrics broken out by subsystem, and last-hour charts from that node's history.                                                                                                                                                                                                 |
 | **Clients**           | Every session in the cluster, filterable by client id, username, IP, connection state and protocol version. **Disconnect** one client or a selection, drop offline sessions, and inspect a session's full detail with its subscriptions and `$SYS` events.                                                |
 | **Subscriptions**     | Every subscription, flat or aggregated by topic filter, with subscriber counts, QoS distribution, node spread and shared groups.                                                                                                                                                                          |
-| **Topics**            | The cluster routing table merged with every topic holding retained state, with an entry point to the monitor.                                                                                                                                                                                             |
+| **Topics**            | The concrete topics messages are actually published to, discovered from live traffic, with per-topic rate, payload volume, QoS seen, and how many subscriptions match — so topics nobody consumes stand out. Retained topics are merged in.                                                               |
 | **Topic monitor**     | Subscribe to any filter on demand and stream messages live, with JSON/text/hex/base64 formatting, pause, search, and export to JSON, NDJSON or CSV.                                                                                                                                                       |
 | **Retained messages** | Browse retained state by topic filter with pagination, inspect payloads, and **clear** them individually or in bulk.                                                                                                                                                                                      |
 | **Settings**          | Dashboard preferences, broker connection status, clock calibration, history-storage availability and plugin activation state.                                                                                                                                                                             |
@@ -116,6 +116,25 @@ curl -X PUT http://localhost:6060/api/v1/plugins/1/rmqtt-sys-topic/load
 
 or permanently, by adding `rmqtt-sys-topic` to `plugins.default_startups` in
 `rmqtt.toml`.
+
+### Published topics vs the routing table
+
+These are two different things, and the dashboard keeps them apart:
+
+- **Topics** lists the concrete topics messages arrive on — `demo/x/temp`.
+  No rmqtt endpoint exposes these, so the page discovers them by watching live
+  traffic through the shared server-side subscription.
+- **Subscriptions** lists the routing table: subscription _filters_ like
+  `demo/+/temp`. This is what `/api/v1/routes` returns and what
+  `stats.topics.count` counts, which is why the overview's Topics tile links
+  there rather than to the Topics page.
+
+Discovery defaults to the filter `+/#` rather than `#`. It covers every
+application topic at any depth (`#` matches zero or more levels, so `+/#`
+matches `a` as well as `a/b/c`), it is not caught by the built-in ACL's
+deny rule for exactly `#` described below, and it excludes `$SYS`, which
+would otherwise swamp the list. Discovery pauses when you leave the page, so
+the dashboard never holds a wildcard subscription open in the background.
 
 ### The `$SYS` ACL
 

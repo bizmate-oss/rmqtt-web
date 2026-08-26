@@ -12,6 +12,7 @@
 	import { toasts } from '$lib/stores/toasts.svelte';
 	import { bytes, clockMs, compact, rate as fmtRate, stamp } from '$lib/utils/format';
 	import { bytesToBase64, formatPayload, preview, toText } from '$lib/utils/payload';
+	import { validateFilter } from '$lib/utils/mqtt-topic';
 	import { download, timestampedName, toCsv } from '$lib/utils/download';
 	import type { CapturedMessage, PayloadFormat } from '$lib/types';
 
@@ -22,30 +23,6 @@
 	let filterInput = $state('#');
 	let activeFilter = $state<string | null>(null);
 	let stream = $state<TopicStream | null>(null);
-
-	/**
-	 * Validates an MQTT topic filter well enough to catch the mistakes that
-	 * produce a silent no-match: `#` anywhere but the last level, and `+` or `#`
-	 * sharing a level with other characters.
-	 */
-	function validateFilter(value: string): string | null {
-		if (!value) return 'Enter a topic filter.';
-		if (value.length > 65535) return 'Topic filter is too long.';
-		const levels = value.split('/');
-		for (let i = 0; i < levels.length; i++) {
-			const level = levels[i];
-			if (level.includes('#') && level !== '#') {
-				return '`#` must occupy a whole level, as in `demo/#`.';
-			}
-			if (level === '#' && i !== levels.length - 1) {
-				return '`#` is only valid as the last level.';
-			}
-			if (level.includes('+') && level !== '+') {
-				return '`+` must occupy a whole level, as in `demo/+/temp`.';
-			}
-		}
-		return null;
-	}
 
 	const filterError = $derived(validateFilter(filterInput.trim()));
 

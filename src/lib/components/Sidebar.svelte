@@ -3,6 +3,7 @@
 	import Icon from './Icon.svelte';
 	import type { IconName } from './Icon.svelte';
 	import { cluster } from '$lib/stores/cluster.svelte';
+	import { publishedTopics } from '$lib/stores/publishedTopics.svelte';
 
 	interface Props {
 		open: boolean;
@@ -33,7 +34,14 @@
 			icon: 'subscriptions',
 			count: () => cluster.stat('subscriptions.count')
 		},
-		{ href: '/topics', label: 'Topics', icon: 'topics', count: () => cluster.stat('topics.count') },
+		{
+			href: '/topics',
+			label: 'Topics',
+			icon: 'topics',
+			// Topics observed being published to, which is what that page lists —
+			// not stats.topics.count, which counts subscription filters.
+			count: () => publishedTopics.distinctTopics
+		},
 		{
 			href: '/retained',
 			label: 'Retained',

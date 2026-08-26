@@ -1,6 +1,7 @@
 import mqtt from 'mqtt';
 import type { MqttClient } from 'mqtt';
 import { rmqtt } from './config';
+import { compileFilter } from '$lib/utils/mqtt-topic';
 
 export interface BridgeMessage {
 	topic: string;
@@ -161,31 +162,6 @@ class Bridge {
 			}
 		};
 	}
-}
-
-/**
- * Compiles an MQTT topic filter into a matcher.
- *
- * Implements the MQTT 3.1.1/5 rules: `+` matches exactly one level, `#` matches
- * the rest (including zero levels), and neither wildcard matches a topic whose
- * first level starts with `$` unless the filter names it explicitly.
- */
-export function compileFilter(filter: string): (topic: string) => boolean {
-	const parts = filter.split('/');
-	const guardsDollar = !parts[0]?.startsWith('$');
-
-	return (topic: string) => {
-		const levels = topic.split('/');
-		if (guardsDollar && levels[0]?.startsWith('$')) return false;
-
-		for (let i = 0; i < parts.length; i++) {
-			const p = parts[i];
-			if (p === '#') return true; // matches this level and everything below
-			if (i >= levels.length) return false;
-			if (p !== '+' && p !== levels[i]) return false;
-		}
-		return parts.length === levels.length;
-	};
 }
 
 // Kept on globalThis so Vite's dev-time module reloads don't leak connections.

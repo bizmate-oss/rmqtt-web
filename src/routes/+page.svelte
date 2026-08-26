@@ -126,10 +126,10 @@
 			label="Topics"
 			value={compact(cluster.stat('topics.count'))}
 			icon="topics"
-			href="/topics"
+			href="/subscriptions"
 			trend={cluster.statSeries('topics.count')}
 			color="var(--series-3)"
-			footnote="{compact(cluster.stat('routes.count'))} routes across the cluster"
+			footnote="subscription filters in the routing table"
 		/>
 		<StatCard
 			label="Subscriptions"
