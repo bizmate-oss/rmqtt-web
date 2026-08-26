@@ -71,8 +71,29 @@
 		void retains.refresh();
 	});
 
-	const items = $derived(retains.data?.items ?? []);
+	/**
+	 * Topics the broker has confirmed cleared, hidden until it stops listing them.
+	 *
+	 * Removal is applied asynchronously, and on the zero-length-publish fallback
+	 * it travels through the retainer first, so the next read can still return the
+	 * row — which looks like the action failed. Filtering here rather than editing
+	 * the fetched list means a refresh cannot resurrect the row, and the entry is
+	 * dropped again as soon as the broker agrees, so a clear that silently failed
+	 * still reappears instead of being hidden for good.
+	 */
+	let cleared = $state<Set<string>>(new Set());
+
+	const items = $derived((retains.data?.items ?? []).filter((i) => !cleared.has(i.topic)));
 	const hasMore = $derived(retains.data?.has_more ?? false);
+
+	$effect(() => {
+		const listed = new Set((retains.data?.items ?? []).map((i) => i.topic));
+		// `cleared` is read untracked so updating it cannot re-trigger this effect.
+		const current = untrack(() => cleared);
+		if (current.size === 0) return;
+		const next = new Set([...current].filter((t) => listed.has(t)));
+		if (next.size !== current.size) cleared = next;
+	});
 
 	const decoded = $derived(
 		items.map((item) => ({ item, payload: base64ToBytes(item.publish.payload) }))
@@ -116,9 +137,7 @@
 		try {
 			await api.deleteRetained(msg.topic);
 			toasts.success('Retained message cleared', msg.topic);
-			// The broker applies the removal asynchronously; give it a moment
-			// before re-reading so the row doesn't reappear for one refresh.
-			await new Promise((r) => setTimeout(r, 250));
+			cleared = new Set([...cleared, msg.topic]);
 			await retains.refresh();
 		} catch (err) {
 			toasts.error('Could not clear it', err instanceof Error ? err.message : String(err));
@@ -134,7 +153,7 @@
 		const topics = [...selected];
 		const results = await Promise.allSettled(topics.map((t) => api.deleteRetained(t)));
 		const failed = results.filter((r) => r.status === 'rejected').length;
-		await new Promise((r) => setTimeout(r, 300));
+		cleared = new Set([...cleared, ...topics.filter((_, i) => results[i].status === 'fulfilled')]);
 		await retains.refresh();
 		busy = false;
 		confirmBulk = false;
@@ -413,11 +432,12 @@
 	</section>
 
 	<p class="text-[11px] text-[var(--text-muted)]">
-		rmqtt has no delete endpoint for retained messages. <strong>Clear</strong> does the MQTT-native
-		thing: it publishes a zero-length payload to the same topic with the retain flag set, which the
-		broker treats as a removal rather than as a message. Subscribers see no new message; the stored
-		value simply stops being replayed to future subscribers. Retained state needs the
-		<code class="mono">rmqtt-retainer</code> plugin.
+		<strong>Clear</strong> calls <code class="mono">DELETE /api/v1/retains</code>, which drops the
+		stored value without publishing anything — a client subscribed to the topic receives nothing. On
+		a broker that predates the endpoint the dashboard falls back to the MQTT-native removal, a
+		zero-length publish with the retain flag set; that clears the value too, but MQTT has the server
+		treat such a packet as a normal publication as well, so every live subscriber is handed an empty
+		message. Retained state needs the <code class="mono">rmqtt-retainer</code> plugin.
 	</p>
 </div>
 
@@ -467,7 +487,7 @@
 <ConfirmDialog
 	open={confirmDelete !== null}
 	title="Clear retained message"
-	body="The dashboard publishes a zero-length retained message to this topic, which tells the broker to drop the stored value. New subscribers will no longer receive it. This cannot be undone."
+	body="The broker drops the stored value for this topic, so it is no longer replayed to new subscribers. Nothing is published, so current subscribers see no message. This cannot be undone."
 	subject={confirmDelete?.topic}
 	confirmLabel="Clear it"
 	{busy}
@@ -478,7 +498,7 @@
 <ConfirmDialog
 	open={confirmBulk}
 	title="Clear {selected.size} retained messages"
-	body="Each selected topic gets a zero-length retained publish, dropping its stored value. This cannot be undone."
+	body="The stored value for each selected topic is dropped. Nothing is published, so current subscribers see no message. This cannot be undone."
 	confirmLabel="Clear all"
 	{busy}
 	onconfirm={removeSelected}

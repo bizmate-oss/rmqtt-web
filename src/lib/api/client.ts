@@ -215,14 +215,29 @@ export const api = {
 	/**
 	 * Clears a retained message.
 	 *
-	 * rmqtt exposes no DELETE for retained messages; the MQTT-native way to drop
-	 * one is to publish a zero-length payload to the same topic with the retain
-	 * flag set, which the broker treats as a removal rather than a message.
+	 * Uses DELETE /api/v1/retains, which removes the stored value without
+	 * publishing anything: verified against rmqtt 0.23, a client subscribed to
+	 * the topic receives nothing.
+	 *
+	 * The fallback is the MQTT-native removal — a zero-length publish with the
+	 * retain flag set — for brokers that predate the endpoint. It is second
+	 * choice because the spec has the server treat that packet as a normal
+	 * publication as well as a removal, so every live subscriber is handed a
+	 * zero-length message (confirmed on the same broker). Consumers that do not
+	 * expect an empty payload can choke on it.
 	 */
-	deleteRetained: (topic: string) =>
-		request<string>('POST', '/mqtt/publish', {
-			body: { topic, payload: '', encoding: 'plain', qos: 0, retain: true, clientid: 'rmqtt-web' }
-		})
+	deleteRetained: async (topic: string) => {
+		try {
+			return await request<string>('DELETE', '/retains', { query: { topic } });
+		} catch (err) {
+			const missing =
+				err instanceof ApiError && (err.status === 404 || err.status === 405 || err.status === 501);
+			if (!missing) throw err;
+			return request<string>('POST', '/mqtt/publish', {
+				body: { topic, payload: '', encoding: 'plain', qos: 0, retain: true, clientid: 'rmqtt-web' }
+			});
+		}
+	}
 };
 
 export interface RuntimeConfig {

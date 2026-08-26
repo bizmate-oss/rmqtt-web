@@ -236,10 +236,17 @@ never disagree with the totals on the Overview.
 
 ### Clearing a retained message
 
-rmqtt exposes no delete endpoint for retained messages. **Clear** does the
-MQTT-native thing: it publishes a zero-length payload to the same topic with the
-retain flag set, which the broker treats as a removal. Subscribers see no new
-message; the stored value simply stops being replayed.
+**Clear** calls `DELETE /api/v1/retains?topic=…`, which drops the stored value
+without publishing anything — verified against rmqtt 0.23: a client subscribed
+to the topic receives nothing. That endpoint is advertised by `GET /api/v1`
+but is missing from `docs/en_US/http-api.md`, which is easy to miss.
+
+For brokers that predate it the dashboard falls back to the MQTT-native
+removal — a zero-length publish with the retain flag set. That clears the
+value too, but it is second choice: MQTT has the server treat such a packet
+as a normal publication as well as a removal, so every live subscriber is
+handed an empty message, which a consumer that does not expect one can choke
+on.
 
 ### Broker clock calibration
 
