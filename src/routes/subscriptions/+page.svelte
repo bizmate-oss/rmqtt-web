@@ -6,6 +6,7 @@
 	import SortHeader from '$lib/components/SortHeader.svelte';
 	import StatCard from '$lib/components/StatCard.svelte';
 	import { Resource } from '$lib/stores/resource.svelte';
+	import { cluster } from '$lib/stores/cluster.svelte';
 	import { setPageMeta } from '$lib/stores/pageMeta.svelte';
 	import { settings } from '$lib/stores/settings.svelte';
 	import { toasts } from '$lib/stores/toasts.svelte';
@@ -70,7 +71,25 @@
 		void subs.refresh();
 	});
 
-	const rows = $derived(subs.data ?? []);
+	/**
+	 * The dashboard's own subscriptions, excluded by default.
+	 *
+	 * Its server-side bridge holds `$SYS/#` for the live feed, and `+/#` while
+	 * the Topics page is discovering. The broker lists both like any other
+	 * subscription, so leaving them in inflates every figure on this page and
+	 * makes the observer part of what it observes. They are hidden rather than
+	 * dropped: the count is shown, and the toggle brings them back for anyone
+	 * auditing against the broker's own subscriptions.count.
+	 */
+	let includeSelf = $state(false);
+
+	const ownRows = $derived((subs.data ?? []).filter((s) => s.clientid === cluster.bridgeClientId));
+
+	const rows = $derived(
+		includeSelf
+			? (subs.data ?? [])
+			: (subs.data ?? []).filter((s) => s.clientid !== cluster.bridgeClientId)
+	);
 
 	/* ------------------------------------------------------- derived metrics */
 
@@ -335,10 +354,23 @@
 				</h2>
 				<p class="mt-0.5 text-[11px] text-[var(--text-muted)]">
 					{#if subs.loadedAt}Read {relative(subs.loadedAt)}{/if}
+					{#if ownRows.length > 0 && !includeSelf}
+						· {ownRows.length} of this dashboard's own hidden
+					{/if}
 				</p>
 			</div>
 
-			<div class="flex items-center gap-2">
+			<div class="flex flex-wrap items-center gap-2">
+				{#if ownRows.length > 0 || includeSelf}
+					<label class="flex items-center gap-1.5 text-xs text-[var(--text-2)]">
+						<input
+							type="checkbox"
+							class="h-3.5 w-3.5 rounded border-[var(--border-strong)]"
+							bind:checked={includeSelf}
+						/>
+						Include this dashboard
+					</label>
+				{/if}
 				<div class="flex rounded-md border border-[var(--border-strong)] p-0.5 text-xs">
 					<button
 						type="button"
@@ -432,6 +464,15 @@
 									>
 										{sub.clientid}
 									</a>
+									{#if sub.clientid === cluster.bridgeClientId}
+										<span
+											class="chip ml-1.5 align-middle"
+											style="background:var(--surface-3);color:var(--text-muted)"
+											title="Held by this dashboard's own $SYS and topic-discovery connection"
+										>
+											this dashboard
+										</span>
+									{/if}
 								</td>
 								<td class="num">{subQos(sub)}</td>
 								<td class="mono">{subShare(sub) ?? '—'}</td>
@@ -454,7 +495,11 @@
 										? 'Reading subscriptions…'
 										: hasFilters
 											? 'No subscriptions match these filters.'
-											: 'No subscriptions in the cluster.'}
+											: ownRows.length > 0
+												? // "None in the cluster" would be untrue when the only
+													// subscription present is the dashboard's own.
+													"No client subscriptions — only this dashboard's own, which is hidden."
+												: 'No subscriptions in the cluster.'}
 								</td>
 							</tr>
 						{/each}
@@ -552,6 +597,11 @@
 	<p class="text-[11px] text-[var(--text-muted)]">
 		rmqtt keeps no per-subscription counters, so the figures above are aggregated from the
 		subscription table itself: how many sessions hold each filter, on which nodes, at which QoS, and
-		which shared groups it belongs to. For per-message behaviour, use the topic monitor.
+		which shared groups it belongs to. For per-message behaviour, use the topic monitor. The
+		dashboard's own subscriptions are left out — its bridge holds
+		<code class="mono">$SYS/#</code> for the live feed, and <code class="mono">+/#</code> while the
+		Topics page is discovering — so these counts describe your clients rather than the observer.
+		Tick <em>Include this dashboard</em> to reconcile against the broker's own
+		<code class="mono">subscriptions.count</code>.
 	</p>
 </div>
