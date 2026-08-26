@@ -1,0 +1,45 @@
+# Local development stack: an rmqtt broker plus this dashboard.
+#
+#   docker compose up -d rmqtt      # broker only, then `npm run dev`
+#   docker compose up -d            # broker + dashboard, on http://localhost:3000
+#
+# The stock rmqtt image does not start the $SYS publisher, so it is enabled on
+# first boot (see the `rmqtt-init` service). To make that permanent instead, add
+# "rmqtt-sys-topic" to `plugins.default_startups` in rmqtt.toml.
+services:
+  rmqtt:
+    image: rmqtt/rmqtt:latest
+    container_name: rmqtt
+    ports:
+      - '1883:1883' # MQTT
+      - '8883:8883' # MQTT over TLS
+      - '8080:8080' # MQTT over WebSocket
+      - '6060:6060' # HTTP API
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:6060/api/v1/health/check']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  # Turns on the $SYS system-topic publisher once the broker is accepting requests.
+  rmqtt-init:
+    image: curlimages/curl:latest
+    depends_on:
+      rmqtt:
+        condition: service_healthy
+    command: ['-fsS', '-X', 'PUT', 'http://rmqtt:6060/api/v1/plugins/1/rmqtt-sys-topic/load']
+    restart: on-failure
+
+  dashboard:
+    build: .
+    container_name: rmqtt-web
+    depends_on:
+      rmqtt:
+        condition: service_healthy
+    ports:
+      - '3000:3000'
+    environment:
+      RMQTT_API_URL: http://rmqtt:6060
+      RMQTT_MQTT_URL: mqtt://rmqtt:1883
+      # rmqtt's built-in ACL grants $SYS/# to this username from any address.
+      RMQTT_MQTT_USERNAME: dashboard

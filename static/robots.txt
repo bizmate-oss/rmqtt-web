@@ -1,0 +1,3 @@
+# An operations dashboard for a private broker — nothing here should be indexed.
+User-agent: *
+Disallow: /

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Monitoring dashboard for an RMQTT broker cluster" />
+		<link rel="icon" href="%sveltekit.assets%/favicon.svg" />
+		<script>
+			// Applies the stored theme before first paint so a reload in dark mode
+			// doesn't flash the light surfaces.
+			try {
+				const raw = localStorage.getItem('rmqtt-web.settings');
+				const choice = raw ? JSON.parse(raw).theme : 'system';
+				const dark =
+					choice === 'dark' ||
+					((!choice || choice === 'system') &&
+						window.matchMedia('(prefers-color-scheme: dark)').matches);
+				if (dark) document.documentElement.classList.add('dark');
+			} catch (e) {
+				/* first visit, or storage blocked */
+			}
+		</script>
+		%sveltekit.head%
+	</head>
+	<body data-sveltekit-preload-data="hover">
+		<div style="display: contents">%sveltekit.body%</div>
+	</body>
+</html>

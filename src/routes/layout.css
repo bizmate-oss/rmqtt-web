@@ -1,0 +1,351 @@
+@import 'tailwindcss';
+@plugin '@tailwindcss/forms';
+
+/* Theme is driven by a `.dark` class on <html>, set by src/lib/stores/theme.svelte.ts */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------------------------------------------------------------------------
+   Design tokens.
+
+   Chart series / status / chrome values come from the validated data-viz
+   reference palette. Both the light set (on surface #ffffff) and the dark set
+   (on surface #171d24) were run through the palette validator: lightness band,
+   chroma floor, adjacent-pair CVD separation and normal-vision floor all pass.
+   In light mode series 3/4/5 sit below 3:1 against the surface, so every chart
+   ships a legend + direct end labels + a table view as the required relief.
+   Do not re-step these by eye; re-run the validator if they ever change.
+--------------------------------------------------------------------------- */
+:root {
+	color-scheme: light;
+
+	/* surfaces & ink */
+	--bg: #f4f6f8;
+	--surface: #ffffff;
+	--surface-2: #f7f9fa;
+	--surface-3: #eef2f5;
+	--border: #e3e8ee;
+	--border-strong: #cbd5e0;
+	--text: #10161d;
+	--text-2: #4a5560;
+	--text-muted: #7b8794;
+
+	/* brand (chrome only — never a chart series) */
+	--brand: #00a368;
+	--brand-hover: #008f5a;
+	--brand-soft: #e6f6ef;
+	--brand-ink: #006b45;
+
+	/* status — fixed, never themed, always shipped with an icon + label */
+	--good: #0ca30c;
+	--warning: #fab219;
+	--serious: #ec835a;
+	--critical: #d03b3b;
+	--good-soft: #e7f6e7;
+	--warning-soft: #fdf3df;
+	--critical-soft: #fbe9e9;
+	/* Readable text steps for the sub-3:1 status hues. */
+	--good-ink: #0a7d0a;
+	--warning-ink: #8a5d00;
+	--critical-ink: #b32d2d;
+
+	/* chart chrome */
+	--chart-surface: #ffffff;
+	--chart-grid: #e9edf1;
+	--chart-axis: #d5dde4;
+	--chart-muted: #7b8794;
+
+	/* categorical series, fixed order — assign by slot, never cycle */
+	--series-1: #2a78d6;
+	--series-2: #eb6834;
+	--series-3: #1baf7a;
+	--series-4: #eda100;
+	--series-5: #e87ba4;
+	--series-6: #008300;
+	--series-7: #4a3aa7;
+	--series-8: #e34948;
+
+	--shadow-card: 0 1px 2px rgb(16 22 29 / 0.04), 0 1px 3px rgb(16 22 29 / 0.06);
+	--shadow-pop: 0 4px 6px -1px rgb(16 22 29 / 0.08), 0 10px 24px -4px rgb(16 22 29 / 0.14);
+}
+
+.dark {
+	color-scheme: dark;
+
+	--bg: #0d1117;
+	--surface: #171d24;
+	--surface-2: #1c232b;
+	--surface-3: #222b34;
+	--border: #262e38;
+	--border-strong: #36414d;
+	--text: #e6edf3;
+	--text-2: #b1bcc8;
+	--text-muted: #7d8b99;
+
+	--brand: #16b981;
+	--brand-hover: #2ac592;
+	--brand-soft: #0e2b22;
+	--brand-ink: #5fd6ab;
+
+	--good: #0ca30c;
+	--warning: #fab219;
+	--serious: #ec835a;
+	--critical: #d03b3b;
+	--good-soft: #102a14;
+	--warning-soft: #2e2612;
+	--critical-soft: #2e1618;
+	--good-ink: #3fc23f;
+	--warning-ink: #fab219;
+	--critical-ink: #ef6b6b;
+
+	--chart-surface: #171d24;
+	--chart-grid: #232b35;
+	--chart-axis: #313c48;
+	--chart-muted: #8b98a6;
+
+	--series-1: #3987e5;
+	--series-2: #d95926;
+	--series-3: #199e70;
+	--series-4: #c98500;
+	--series-5: #d55181;
+	--series-6: #008300;
+	--series-7: #9085e9;
+	--series-8: #e66767;
+
+	--shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 1px 3px rgb(0 0 0 / 0.36);
+	--shadow-pop: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 10px 24px -4px rgb(0 0 0 / 0.5);
+}
+
+/* Expose the tokens as Tailwind utilities (`bg-surface`, `text-muted`, …).
+   `inline` keeps them as var() references so the .dark swap applies at runtime. */
+@theme inline {
+	--color-bg: var(--bg);
+	--color-surface: var(--surface);
+	--color-surface-2: var(--surface-2);
+	--color-surface-3: var(--surface-3);
+	--color-border: var(--border);
+	--color-border-strong: var(--border-strong);
+	--color-ink: var(--text);
+	--color-ink-2: var(--text-2);
+	--color-muted: var(--text-muted);
+	--color-brand: var(--brand);
+	--color-brand-hover: var(--brand-hover);
+	--color-brand-soft: var(--brand-soft);
+	--color-brand-ink: var(--brand-ink);
+	--color-good: var(--good);
+	--color-warning: var(--warning);
+	--color-serious: var(--serious);
+	--color-critical: var(--critical);
+
+	--font-sans:
+		system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji';
+	--font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+@layer base {
+	html {
+		background-color: var(--bg);
+	}
+
+	body {
+		background-color: var(--bg);
+		color: var(--text);
+		font-family: var(--font-sans);
+		-webkit-font-smoothing: antialiased;
+	}
+
+	:focus-visible {
+		outline: 2px solid var(--brand);
+		outline-offset: 2px;
+	}
+
+	::-webkit-scrollbar {
+		width: 10px;
+		height: 10px;
+	}
+	::-webkit-scrollbar-track {
+		background: transparent;
+	}
+	::-webkit-scrollbar-thumb {
+		background: var(--border-strong);
+		border: 3px solid var(--bg);
+		border-radius: 999px;
+	}
+	::-webkit-scrollbar-thumb:hover {
+		background: var(--text-muted);
+	}
+}
+
+@layer components {
+	.card {
+		background-color: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: 0.75rem;
+		box-shadow: var(--shadow-card);
+	}
+
+	.btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.375rem;
+		border-radius: 0.5rem;
+		border: 1px solid transparent;
+		padding: 0.4375rem 0.875rem;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		line-height: 1.25rem;
+		white-space: nowrap;
+		cursor: pointer;
+		transition:
+			background-color 120ms ease,
+			border-color 120ms ease,
+			color 120ms ease;
+	}
+	.btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.btn-primary {
+		background-color: var(--brand);
+		color: #fff;
+	}
+	.btn-primary:hover:not(:disabled) {
+		background-color: var(--brand-hover);
+	}
+
+	.btn-ghost {
+		background-color: var(--surface);
+		border-color: var(--border-strong);
+		color: var(--text-2);
+	}
+	.btn-ghost:hover:not(:disabled) {
+		background-color: var(--surface-3);
+		color: var(--text);
+	}
+
+	.btn-danger {
+		background-color: transparent;
+		border-color: color-mix(in srgb, var(--critical) 45%, transparent);
+		color: var(--critical);
+	}
+	.btn-danger:hover:not(:disabled) {
+		background-color: var(--critical-soft);
+	}
+
+	.btn-sm {
+		padding: 0.25rem 0.5rem;
+		font-size: 0.75rem;
+	}
+
+	.input {
+		width: 100%;
+		background-color: var(--surface);
+		border: 1px solid var(--border-strong);
+		border-radius: 0.5rem;
+		padding: 0.4375rem 0.625rem;
+		font-size: 0.8125rem;
+		line-height: 1.25rem;
+		color: var(--text);
+	}
+	.input::placeholder {
+		color: var(--text-muted);
+	}
+	.input:focus {
+		border-color: var(--brand);
+		outline: none;
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 18%, transparent);
+	}
+
+	/* Leave room for the native dropdown indicator so a long option label
+	   never runs underneath it. */
+	select.input {
+		padding-right: 2rem;
+	}
+
+	.label {
+		display: block;
+		font-size: 0.6875rem;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--text-muted);
+		margin-bottom: 0.3125rem;
+	}
+
+	/* Data tables: tabular figures because columns must align vertically. */
+	.tbl {
+		width: 100%;
+		border-collapse: separate;
+		border-spacing: 0;
+		font-size: 0.8125rem;
+	}
+	.tbl th {
+		position: sticky;
+		top: 0;
+		z-index: 1;
+		background-color: var(--surface-2);
+		border-bottom: 1px solid var(--border);
+		padding: 0.5rem 0.75rem;
+		text-align: left;
+		font-size: 0.6875rem;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--text-muted);
+		white-space: nowrap;
+	}
+	.tbl td {
+		border-bottom: 1px solid var(--border);
+		padding: 0.5rem 0.75rem;
+		color: var(--text-2);
+		vertical-align: middle;
+	}
+	.tbl tbody tr:hover td {
+		background-color: var(--surface-2);
+	}
+	.tbl .num {
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+		color: var(--text);
+	}
+
+	/* Row actions stay reachable when the table scrolls sideways. */
+	.tbl .sticky-actions {
+		position: sticky;
+		right: 0;
+		background-color: var(--surface);
+		border-left: 1px solid var(--border);
+	}
+	.tbl thead .sticky-actions {
+		background-color: var(--surface-2);
+		z-index: 2;
+	}
+	.tbl tbody tr:hover .sticky-actions {
+		background-color: var(--surface-2);
+	}
+
+	.chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		border-radius: 999px;
+		padding: 0.0625rem 0.5rem;
+		font-size: 0.6875rem;
+		font-weight: 600;
+		line-height: 1.125rem;
+		white-space: nowrap;
+	}
+
+	.mono {
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+	}
+}
+
+@utility truncate-cell {
+	max-width: 22rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
