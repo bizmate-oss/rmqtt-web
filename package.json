@@ -1,7 +1,7 @@
 {
 	"name": "rmqtt-web",
 	"private": true,
-	"version": "0.0.2",
+	"version": "0.0.3",
 	"description": "Monitoring and control dashboard for an RMQTT broker cluster",
 	"license": "MIT",
 	"repository": {
