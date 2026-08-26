@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onDestroy, onMount, untrack } from 'svelte';
 	import { page } from '$app/state';
-	import { api, errorText, type ClientQuery } from '$lib/api/client';
+	import { api, ApiError, errorText, type ClientQuery } from '$lib/api/client';
 	import ClientDetail from '$lib/components/ClientDetail.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import ErrorBanner from '$lib/components/ErrorBanner.svelte';
@@ -165,7 +165,15 @@
 			// The session may persist (clean_start=false); re-read to show its new state.
 			await clients.refresh();
 		} catch (err) {
-			toasts.error('Could not disconnect', errorText(err));
+			// The broker answers 404 once the session has gone. The button's purpose
+			// is already served, so this is an outcome to confirm, not an error to
+			// report in red.
+			if (err instanceof ApiError && err.status === 404) {
+				toasts.info('Already disconnected', `${client.clientid} is no longer on the broker.`);
+				await clients.refresh();
+			} else {
+				toasts.error('Could not disconnect', errorText(err));
+			}
 		} finally {
 			busy = false;
 			confirmKick = null;
@@ -177,17 +185,29 @@
 		busy = true;
 		const ids = [...selected];
 		const results = await Promise.allSettled(ids.map((id) => api.kickClient(id)));
-		const failed = results.filter((r) => r.status === 'rejected').length;
+
+		// A 404 means that session had already gone, which is the intended end
+		// state; only anything else is a real failure.
+		const alreadyGone = results.filter(
+			(r) => r.status === 'rejected' && r.reason instanceof ApiError && r.reason.status === 404
+		).length;
+		const failed = results.filter((r) => r.status === 'rejected').length - alreadyGone;
+		const disconnected = ids.length - failed - alreadyGone;
+
 		busy = false;
 		confirmBulk = false;
 		selected = new Set();
 
+		const goneNote = alreadyGone > 0 ? `${alreadyGone} had already gone offline.` : undefined;
 		if (failed === 0) {
-			toasts.success(`Disconnected ${ids.length} client${ids.length === 1 ? '' : 's'}`);
+			toasts.success(
+				`Disconnected ${disconnected} client${disconnected === 1 ? '' : 's'}`,
+				goneNote
+			);
 		} else {
 			toasts.error(
-				`Disconnected ${ids.length - failed} of ${ids.length}`,
-				`${failed} failed — they may have already gone offline.`
+				`Disconnected ${disconnected} of ${ids.length}`,
+				[`${failed} failed.`, goneNote].filter(Boolean).join(' ')
 			);
 		}
 		await clients.refresh();

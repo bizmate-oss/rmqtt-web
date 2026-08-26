@@ -55,7 +55,11 @@ function describe(value: unknown): string {
 		const record = value as Record<string, unknown>;
 		// Only strings are taken from these keys, so a nested object cannot
 		// recurse back into the "[object Object]" case.
-		for (const key of ['message', 'reason', 'detail', 'details', 'description', 'error']) {
+		// `brief` is salvo's human sentence: with an `Accept: application/json`
+		// request — which the proxy always sends — rmqtt's HTTP layer answers
+		// errors as {"error":{"code":404,"name":…,"brief":…}} rather than the
+		// HTML page a bare curl gets back.
+		for (const key of ['message', 'reason', 'detail', 'details', 'description', 'brief', 'error']) {
 			const candidate = record[key];
 			if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
 		}
@@ -73,11 +77,14 @@ function errorMessage(res: Response, text: string): string {
 	const status = `${res.status} ${res.statusText}`.trim();
 	const trimmed = text.trim();
 
-	if (trimmed.startsWith('<')) {
-		return res.status === 404
-			? 'Not found — the client or resource no longer exists on the broker.'
-			: status;
+	// Keyed off the status, not the body: the same 404 arrives as an HTML page
+	// for a bare request and as JSON for the proxy's, and neither body says
+	// anything more useful than this.
+	if (res.status === 404) {
+		return 'Not found — the client or resource no longer exists on the broker.';
 	}
+	// An HTML error page carries nothing worth quoting.
+	if (trimmed.startsWith('<')) return status;
 	try {
 		const parsed: unknown = JSON.parse(trimmed);
 		if (parsed && typeof parsed === 'object' && 'error' in parsed) {
