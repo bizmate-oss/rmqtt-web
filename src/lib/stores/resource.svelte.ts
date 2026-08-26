@@ -1,4 +1,4 @@
-import { ApiError } from '$lib/api/client';
+import { ApiError, errorText } from '$lib/api/client';
 
 /**
  * A single polled read of the broker.
@@ -44,8 +44,7 @@ export class Resource<T> {
 			this.loadedAt = Date.now();
 		} catch (err) {
 			if (controller.signal.aborted || (err instanceof Error && err.name === 'AbortError')) return;
-			this.error =
-				err instanceof ApiError || err instanceof Error ? err.message : 'Unexpected error';
+			this.error = errorText(err);
 		} finally {
 			if (!controller.signal.aborted) this.loading = false;
 		}

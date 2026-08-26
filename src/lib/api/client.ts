@@ -36,23 +36,69 @@ export type Query = Record<string, string | number | boolean | undefined | null>
  * answers with JSON or a bare string for most failures, but its HTTP layer
  * (salvo) serves a full HTML page for 404s — which must never end up in a toast.
  */
+/**
+ * Renders an unknown value as something a person can read.
+ *
+ * `String(value)` on an object yields "[object Object]", which is exactly what
+ * a failed disconnect was showing when the broker answered with a structured
+ * error rather than a bare string. Message-bearing keys are preferred, then the
+ * JSON itself, so the operator always sees the broker's own words instead of a
+ * placeholder.
+ */
+function describe(value: unknown): string {
+	if (value === null || value === undefined) return '';
+	if (typeof value === 'string') return value.trim();
+	if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+	if (value instanceof Error) return value.message;
+
+	if (typeof value === 'object') {
+		const record = value as Record<string, unknown>;
+		// Only strings are taken from these keys, so a nested object cannot
+		// recurse back into the "[object Object]" case.
+		for (const key of ['message', 'reason', 'detail', 'details', 'description', 'error']) {
+			const candidate = record[key];
+			if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
+		}
+		try {
+			const json = JSON.stringify(value);
+			if (json && json !== '{}' && json !== '[]') return json;
+		} catch {
+			/* circular — fall through */
+		}
+	}
+	return '';
+}
+
 function errorMessage(res: Response, text: string): string {
+	const status = `${res.status} ${res.statusText}`.trim();
 	const trimmed = text.trim();
+
 	if (trimmed.startsWith('<')) {
 		return res.status === 404
 			? 'Not found — the client or resource no longer exists on the broker.'
-			: `${res.status} ${res.statusText}`;
+			: status;
 	}
 	try {
-		const parsed = JSON.parse(trimmed);
+		const parsed: unknown = JSON.parse(trimmed);
 		if (parsed && typeof parsed === 'object' && 'error' in parsed) {
-			return String((parsed as { error: unknown }).error);
+			return describe((parsed as { error: unknown }).error) || status;
 		}
-		if (typeof parsed === 'string') return parsed;
+		// A parsed body with nothing readable in it (`{}`) is less use than the
+		// status line; raw text only reaches the caller when JSON.parse fails.
+		return describe(parsed) || status;
 	} catch {
 		/* not JSON — fall through to the raw text */
 	}
-	return trimmed || `${res.status} ${res.statusText}`;
+	return trimmed || status;
+}
+
+/**
+ * The message to show a person for a thrown value, never "[object Object]" and
+ * never empty. Use this at every catch site that surfaces an error in the UI.
+ */
+export function errorText(err: unknown, fallback = 'Unexpected error'): string {
+	if (err instanceof Error) return err.message.trim() || fallback;
+	return describe(err) || fallback;
 }
 
 function qs(params?: Query): string {

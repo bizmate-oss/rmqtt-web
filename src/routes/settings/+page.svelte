@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
-	import { api, fetchRuntimeConfig, type RuntimeConfig } from '$lib/api/client';
+	import { api, errorText, fetchRuntimeConfig, type RuntimeConfig } from '$lib/api/client';
 	import ErrorBanner from '$lib/components/ErrorBanner.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import StatusChip from '$lib/components/StatusChip.svelte';
@@ -23,7 +23,7 @@
 	onMount(() => {
 		fetchRuntimeConfig()
 			.then((cfg) => (runtime = cfg))
-			.catch((err) => (runtimeError = err instanceof Error ? err.message : String(err)));
+			.catch((err) => (runtimeError = errorText(err)));
 		plugins.start(30_000);
 	});
 	onDestroy(() => plugins.stop());

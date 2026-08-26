@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onDestroy, onMount, untrack } from 'svelte';
 	import { page } from '$app/state';
-	import { api, type ClientQuery } from '$lib/api/client';
+	import { api, errorText, type ClientQuery } from '$lib/api/client';
 	import ClientDetail from '$lib/components/ClientDetail.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import ErrorBanner from '$lib/components/ErrorBanner.svelte';
@@ -165,7 +165,7 @@
 			// The session may persist (clean_start=false); re-read to show its new state.
 			await clients.refresh();
 		} catch (err) {
-			toasts.error('Could not disconnect', err instanceof Error ? err.message : String(err));
+			toasts.error('Could not disconnect', errorText(err));
 		} finally {
 			busy = false;
 			confirmKick = null;
@@ -204,7 +204,7 @@
 			);
 			await clients.refresh();
 		} catch (err) {
-			toasts.error('Could not remove sessions', err instanceof Error ? err.message : String(err));
+			toasts.error('Could not remove sessions', errorText(err));
 		} finally {
 			busy = false;
 			confirmOfflines = false;

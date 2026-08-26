@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onDestroy, onMount, untrack } from 'svelte';
 	import { page } from '$app/state';
-	import { api } from '$lib/api/client';
+	import { api, errorText } from '$lib/api/client';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import ErrorBanner from '$lib/components/ErrorBanner.svelte';
 	import Icon from '$lib/components/Icon.svelte';
@@ -140,7 +140,7 @@
 			cleared = new Set([...cleared, msg.topic]);
 			await retains.refresh();
 		} catch (err) {
-			toasts.error('Could not clear it', err instanceof Error ? err.message : String(err));
+			toasts.error('Could not clear it', errorText(err));
 		} finally {
 			busy = false;
 			confirmDelete = null;

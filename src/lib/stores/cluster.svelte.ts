@@ -1,4 +1,4 @@
-import { api } from '$lib/api/client';
+import { api, errorText } from '$lib/api/client';
 import { toText } from '$lib/utils/payload';
 import { brokerClock } from './brokerClock.svelte';
 import { TopicStream, type StreamMessage } from './stream.svelte';
@@ -276,7 +276,7 @@ class ClusterStore {
 			this.error = null;
 			this.loadedAt = Date.now();
 		} catch (err) {
-			this.error = err instanceof Error ? err.message : 'Cannot reach the broker';
+			this.error = errorText(err, 'Cannot reach the broker');
 		} finally {
 			this.loading = false;
 		}

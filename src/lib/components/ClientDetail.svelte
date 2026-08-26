@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { api } from '$lib/api/client';
+	import { api, errorText } from '$lib/api/client';
 	import { subQos, subShare, type ClientInfo, type SubscriptionInfo } from '$lib/types';
 	import { parseBrokerTime } from '$lib/stores/brokerClock.svelte';
 	import { duration, protoName, relative } from '$lib/utils/format';
@@ -32,7 +32,7 @@
 		api
 			.clientSubscriptions(id)
 			.then((rows) => (subscriptions = rows))
-			.catch((err) => (subsError = err instanceof Error ? err.message : String(err)))
+			.catch((err) => (subsError = errorText(err)))
 			.finally(() => (loadingSubs = false));
 	});
 
